@@ -1,0 +1,5 @@
+teste local
+codenation test -c go-2
+
+submeter
+codenation submit -c go-2
