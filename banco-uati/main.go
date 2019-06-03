@@ -4,7 +4,10 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"mime/multipart"
+	"net/http"
 	"os"
 
 	_ "github.com/lib/pq"
@@ -18,42 +21,79 @@ type Clientes struct {
 }
 
 func main() {
-	/*
-		connStr := "user=postgres dbname=uatidb sslmode=disable"
-		db, err := sql.Open("postgres", connStr)
-		defer db.Close()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		rows, err := db.Query(`SELECT id, nome FROM clientes`)
-		if err != nil {
-			panic(err)
-		}
-		defer rows.Close()
-		for rows.Next() {
-			clientes := Clientes{}
-			err = rows.Scan(&clientes.Id, &clientes.Nome)
-			if err != nil {
-				panic(err)
-			}
-			fmt.Println(clientes)
-		}
-		err = rows.Err()
-		if err != nil {
-			panic(err)
-		}
-	*/
-	ReadCSV(0)
+	setupRoutes()
 }
 
-func ReadCSV(collumn int) {
+func uploadFile(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("File Upload Endpoint Hit")
+
+	// Parse our multipart form, 10 << 20 specifies a maximum
+	// upload of 10 MB files.
+	r.ParseMultipartForm(10 << 20)
+	// FormFile returns the first file for the given key `myFile`
+	// it also returns the FileHeader so we can get the Filename,
+	// the Header and the size of the file
+	file, handler, err := r.FormFile("myFile")
+	if err != nil {
+		fmt.Println("Error Retrieving the File")
+		fmt.Println(err)
+		return
+	}
+	defer file.Close()
+	fmt.Printf("Uploaded File: %+v\n", handler.Filename)
+	fmt.Printf("File Size: %+v\n", handler.Size)
+	fmt.Printf("MIME Header: %+v\n", handler.Header)
+
+	// Create a temporary file within our temp-csv directory that follows
+	// a particular naming pattern
+	tempFile, err := ioutil.TempFile("temp-csv", "upload-*.csv")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer tempFile.Close()
+
+	// read all of the contents of our uploaded file into a
+	// byte array
+	fileBytes, err := ioutil.ReadAll(file)
+	if err != nil {
+		fmt.Println(err)
+	}
+	// write this byte array to our temporary file
+	tempFile.Write(fileBytes)
+	// return that we have successfully uploaded our file!
+	fmt.Fprintf(w, "Upload realizado com sucesso!\n")
+
+	// save data to database
+	ProccessCSV(0, file, r.FormValue("clear"), w)
+}
+
+func setupRoutes() {
+	http.HandleFunc("/upload", uploadFile)
+	http.ListenAndServe(":8080", nil)
+}
+
+func ProccessCSV(collumn int, f multipart.File, checkbox string, w http.ResponseWriter) {
 
 	connStr := "user=postgres dbname=uatidb sslmode=disable"
 	db, err := sql.Open("postgres", connStr)
 	defer db.Close()
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	// clear the clients table before import?
+	if checkbox == "clear" {
+		sqlStatement := `DELETE FROM clientes;`
+		res, err := db.Exec(sqlStatement)
+		if err != nil {
+			panic(err)
+		}
+		count, err := res.RowsAffected()
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("Clientes excluídos: ", count)
+		fmt.Fprintln(w, "Clientes excluídos: ", count)
 	}
 
 	// Abre o arquivo
@@ -75,23 +115,15 @@ func ReadCSV(collumn int) {
 	RETURNING id`
 	id := 0
 
-	/*
-		err = db.QueryRow(sqlStatement, "jon@calhoun.io").Scan(&id)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println("New record ID is:", id)
-	*/
-
-	// Loop nas linhas populando slice partindo da linha 0
+	i := 0
 	for _, linha := range linhas[0:] {
-		//data = append(data, linha[collumn])
 		err = db.QueryRow(sqlStatement, linha[collumn]).Scan(&id)
 		if err != nil {
 			panic(err)
 		}
 		fmt.Println("New record ID is:", id)
-
+		i++
 	}
-	fmt.Println("acabou")
+	fmt.Println("Clientes importados: ", i)
+	fmt.Fprintln(w, "Clientes importados: ", i)
 }

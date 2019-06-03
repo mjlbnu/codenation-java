@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Importação de Clientes do Banco Uati</title>
+</head>
+
+<body>
+    <div id="form">
+        <form enctype="multipart/form-data" action="http://localhost:8080/upload" method="post">
+            <input type="checkbox" id="clear" name="clear" value="clear" unchecked>
+            <label for="clear">Clear clients table before import</label>
+            <input type="file" name="myFile" />
+            <input type="submit" value="upload" />
+        </form>
+    </div>
+</body>
+
+</html>
